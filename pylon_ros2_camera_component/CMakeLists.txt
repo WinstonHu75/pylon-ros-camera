@@ -9,7 +9,7 @@ endif()
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -35,6 +35,21 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
    message(" * Debug Mode")
 endif()
 
+# ========== 修复 PCL 路径问题 ==========
+# 在查找 pcl_ros 之前设置正确的 PCL 路径
+set(PCL_DIR "/usr/share/pcl-1.14")
+
+# 查找 PCL 包
+find_package(PCL QUIET)
+if(PCL_FOUND)
+  message(STATUS "Found PCL: ${PCL_VERSION}")
+else()
+  # 如果自动查找失败，手动设置路径
+  set(PCL_INCLUDE_DIRS "/usr/include/pcl-1.14")
+  set(PCL_LIBRARY_DIRS "/usr/lib/x86_64-linux-gnu")
+  message(STATUS "Manually setting PCL paths")
+endif()
+
 find_package(Pylon QUIET)
 if (NOT ${Pylon_FOUND} OR "$ENV{Pylon_INCLUDE_DIRS}" STREQUAL "")
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindPylon.cmake")
@@ -51,7 +66,26 @@ find_package(rclcpp_components REQUIRED)
 find_package(rcutils REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
+
+# ========== 修复 pcl_ros 目标 ==========
+# 在查找 pcl_ros 之前定义修复函数
+function(fix_pcl_ros_target)
+  if(TARGET pcl_ros::pcl_ros_tf)
+    get_target_property(PCL_ROS_INCLUDES pcl_ros::pcl_ros_tf INTERFACE_INCLUDE_DIRECTORIES)
+    if(PCL_ROS_INCLUDES AND NOT EXISTS "${PCL_ROS_INCLUDES}")
+      message(STATUS "Fixing pcl_ros::pcl_ros_tf include path from '${PCL_ROS_INCLUDES}' to '${PCL_INCLUDE_DIRS}'")
+      set_target_properties(pcl_ros::pcl_ros_tf PROPERTIES 
+        INTERFACE_INCLUDE_DIRECTORIES "${PCL_INCLUDE_DIRS}")
+    endif()
+  endif()
+endfunction()
+
+# 查找 pcl_ros 包
 find_package(pcl_ros REQUIRED)
+
+# 应用修复
+fix_pcl_ros_target()
+
 find_package(camera_info_manager REQUIRED)
 find_package(image_geometry REQUIRED)
 find_package(image_transport REQUIRED)
@@ -189,3 +223,7 @@ ament_export_libraries(${PROJECT_NAME})
 ament_export_dependencies(${PYLON_ROS2_CAMERA_DEPENDENCIES})
 
 ament_package()
+
+
+
+
